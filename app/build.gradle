@@ -30,4 +30,5 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
 
     implementation 'com.github.Brotandos:koatl:v0.1.1'
+    implementation 'com.github.Brotandos:kuantum:v0.0.5'
 }

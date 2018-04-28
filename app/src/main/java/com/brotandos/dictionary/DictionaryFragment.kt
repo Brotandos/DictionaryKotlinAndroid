@@ -1,75 +1,84 @@
 package com.brotandos.dictionary
 
 import android.graphics.Color
-import android.support.v7.widget.RecyclerView
-import android.widget.TextView
+import android.view.View
+import android.widget.Button
+import android.widget.ImageView
 import com.brotandos.koatlib.*
+import com.brotandos.kuantumlib.ListKuantum
+import com.brotandos.kuantumlib.TextKuantum
+import com.brotandos.kuantumlib.of
 import org.jetbrains.anko.imageResource
 import org.jetbrains.anko.matchParent
-import org.jetbrains.anko.sdk25.coroutines.onClick
+import org.jetbrains.anko.scrollView
 
-class DictionaryFragment: KoatlFragment() {
+class DictionaryFragment: KoatlFragment(), View.OnClickListener {
     private val dictionary: Dictionary
     private val icCollapsed = R.drawable.ic_collapsed
     private val icExpanded = R.drawable.ic_expanded
-    private lateinit var vList: RecyclerView
 
     init {
         val list = mutableListOf<DictionaryItem>()
-        for (i in 0 until 20) list += DictionaryItem("key-$i", "value-$i")
+        for (i in 0 until 7) list += DictionaryItem(TextKuantum("key-$i"), TextKuantum("value-$i"))
 
-        dictionary = Dictionary("First dictionary", list)
+        dictionary = Dictionary(TextKuantum("First dictionary"), ListKuantum(list))
     }
 
-    // Все веселье начинается здесь
     override fun markup() = KUI {
-        // Многие view частицы начинаются с маркера 'v'. Ниже LinearLayout с вертикальной ориентацией
-        vVertical {
-            // FrameLayout, bg(colorRes: Int) - лямбда-функция, которая изменяет background частицы
+        scrollView { vVertical {
             vFrame(bg(R.color.colorPrimary)) {
-                // TextView, здесь функция-расширение Float.sp изменяет размер текста
-                // функция lp - сокращенное от layoutParams
-                // submissive означает width = wrapContent и height = wrapContent
-                // g5 - gravity = Gravity.CENTER.
-                // Аттрибут гравитации в библиотеке описан по принципу кнопок телефона
-                // 1 - слева-наверху, 2 - центр-вверх, 5 - середина, 456 - середина вертикали и т.д.
-                vLabel(dictionary.title, 10f.sp, text(Color.WHITE)).lp(submissive, g5)
-            }.lparams(matchParent, 50.dp) // Надеюсь здесь Int.dp интуитивно понятно
-            // Ниже верстается RecyclerView. Моя самая любимая часть библиотеки
-            // Позволяет отказаться от создания адаптеров
-            vList = vList(linear).forEachOf(dictionary.items) {
-                item, i -> // item - текущий объект, i - позиция
-
-                // bgLayerCard - описана внутри Styles.kt.
-                // Это моя попытка внедрить CSS концепцию стилизации view-частиц
-                // mw - сокращенное от width = matchParent и height = wrapContent
+                // Слово "of" - infix функция.
+                // Благодаря ней view-частица привязывается к тексту
+                vLabel(10f.sp, text(Color.WHITE)).lp(submissive, g5) of dictionary.title
+            }.lparams(matchParent, 50.dp)
+            // Функция String.invoke в нижнем примере прописывает placeholder-текст для EditText
+            // Здесь мы привязываем титул словаря. Попробуйте туда что-нибудь написать
+            vText(line, "Set dictionary name"()).lp(row) of dictionary.title
+            // Привязываем recyclerView к списку и описываем верстку для каждого элемента
+            vList(linear).lp(row, m(5.dp)) of dictionary.items.vForEach { item, _ ->
                 vVertical(bgLayerCard, mw) {
-                    lateinit var vValue: TextView
-
-                    // content456 то же, что и gravity = Gravity.CENTER_VERTICAL
-                    // Концепция телефонных кнопок удобна тем,
-                    // что благодаря ей легче представлять расположение дочерних view-частиц
                     vLinear(content456) {
-                        vImage(icCollapsed) {
-                            onClick {
-                                if (this@vImage.resourceId == icCollapsed) {
-                                    imageResource = icExpanded
-                                    vValue.visible()
-                                } else {
-                                    imageResource = icCollapsed
-                                    vValue.hidden()
-                                }
-                            }
-                        }.lp(row, 5f()) // row - то же, что и width = matchParent и height = wrapContent
-                        // функция Float.invoke() у дочерних частиц LinearLayout'а означает weight
-                        //
-                        vLabel(item.key).lp(row, 1f())
-                    }.lp(dominant) // dominant - width = matchParent, height = matchParent
+                        // Кнопка свернуть/развернуть
+                        vImage(icCollapsed, tag(item), this@DictionaryFragment()).lp(row, 5f())
+                        // Привязываем само слово
+                        vText(line).lp(row, 1f()) of item.key
+                        // Кнопка удаления слова
+                        vImage(R.drawable.ic_remove, tag(item), this@DictionaryFragment()).lp(row, 5f())
+                    }.lp(dominant, 1f())
+                    // Привязываем значение слова
+                    vText(text(G.Color.PRIMARY), hidden).lp(dominant, 1f(), m(2.dp)) of item.value
+                }.llp(row, m(2.dp))
+            }
+            vBtn("Add item to dictionary", this@DictionaryFragment())
+        }}
+    }
 
-                    // hidden - visibility = View.GONE
-                    vValue = vLabel(item.value, text(G.Color.PRIMARY), hidden).lp(dominant, 1f(), m(2.dp))
-                }.llp(row, m(2.dp)) // функция m(number: Int) то же, что и margin
-            }.lp(row, m(5.dp))
+    override fun onClick(v: View?) {
+        // Нижняя функция самая сложная для понимания.
+        // Мы внутри списка ищем подходящий элемент словаря...
+        // ... и возвращаем view-частицу для описания слова
+        // Оно нужно, чтобы развернуть элемент словаря...
+        // ... и показать view, отвечающую за описание слова
+        fun ListKuantum<DictionaryItem>.getItemValueView(itemAsViewTag: Any)
+        = find { it == itemAsViewTag }!!.value.firstView
+
+        if (v is Button) {
+            // Добавляем в словарь новый элемент
+            dictionary.items.add(DictionaryItem(TextKuantum(), TextKuantum()))
+        }
+        else when ((v as ImageView).resourceId) {
+            // Разворачиваем слово
+            icCollapsed -> {
+                v.imageResource = icExpanded
+                dictionary.items.getItemValueView(v.tag).visible()
+            }
+            // Сворачиваем слово
+            icExpanded  -> {
+                v.imageResource = icCollapsed
+                dictionary.items.getItemValueView(v.tag).hidden()
+            }
+            // Удаляем элемент
+            R.drawable.ic_remove -> dictionary.items.removeFirstWhere { it == v.tag }
         }
     }
 }
