@@ -1,84 +1,111 @@
 package com.brotandos.dictionary
 
 import android.graphics.Color
+import android.support.v7.widget.RecyclerView
 import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import com.brotandos.koatlib.*
-import com.brotandos.kuantumlib.ListKuantum
-import com.brotandos.kuantumlib.TextKuantum
-import com.brotandos.kuantumlib.of
+import com.brotandos.kuantumlib.*
 import org.jetbrains.anko.imageResource
 import org.jetbrains.anko.matchParent
 import org.jetbrains.anko.scrollView
 
 class DictionaryFragment: KoatlFragment(), View.OnClickListener {
-    private val dictionary: Dictionary
     private val icCollapsed = R.drawable.ic_collapsed
     private val icExpanded = R.drawable.ic_expanded
+    private val qDictionary: Dictionary
+    // Текст поиска
+    private val qFilter = TextKuantum()
+    // Флаг поиска по ключу
+    private val qFilterByKey = BooleanKuantum(true)
+    // Флаг поиска по значению
+    private val qFilterByValue = BooleanKuantum(true)
+    // Сохраним view-частицу, нам она пригодится
+    private lateinit var vList: RecyclerView
 
     init {
         val list = mutableListOf<DictionaryItem>()
         for (i in 0 until 7) list += DictionaryItem(TextKuantum("key-$i"), TextKuantum("value-$i"))
 
-        dictionary = Dictionary(TextKuantum("First dictionary"), ListKuantum(list))
+        qDictionary = Dictionary(TextKuantum("First dictionary"), ListKuantum(list))
     }
 
     override fun markup() = KUI {
         scrollView { vVertical {
             vFrame(bg(R.color.colorPrimary)) {
-                // Слово "of" - infix функция.
-                // Благодаря ней view-частица привязывается к тексту
-                vLabel(10f.sp, text(Color.WHITE)).lp(submissive, g5) of dictionary.title
+                vLabel(10f.sp, text(Color.WHITE)).lp(submissive, g5) of qDictionary.qTitle
             }.lparams(matchParent, 50.dp)
-            // Функция String.invoke в нижнем примере прописывает placeholder-текст для EditText
-            // Здесь мы привязываем титул словаря. Попробуйте туда что-нибудь написать
-            vText(line, "Set dictionary name"()).lp(row) of dictionary.title
-            // Привязываем recyclerView к списку и описываем верстку для каждого элемента
-            vList(linear).lp(row, m(5.dp)) of dictionary.items.vForEach { item, _ ->
+            // Строка поиска
+            vText(line, "Search"(), icLeft(R.drawable.ic_search), pIcon(3.dp)).lp(row) of qFilter {
+                // Здесь прописывается реакция на изменение текста поиска
+                if (it.isEmpty()) {
+                    qDictionary.qItems.clearViewFilter()
+                    vList.scrollToPosition(0)
+                }
+                else filterDictionary(it)
+            }
+            vLinear(p(2.dp)) {
+                // Флаг поиска по ключу
+                vCheck("by key").lp(row, 1f()) of qFilterByKey {
+                    vList.requestLayout()
+                    if (it.not() && qFilterByValue.value.not()) {
+                        qFilterByKey becomes true
+                        qFilterByValue becomes true
+                    }
+                    filterDictionary(qFilter.value)
+                }
+                // Флаг поиска по значению
+                vCheck("by value").lp(row, 1f()) of qFilterByValue {
+                    vList.requestLayout()
+                    if (it.not() && qFilterByKey.value.not()) {
+                        qFilterByKey becomes true
+                        qFilterByValue becomes true
+                    }
+                    filterDictionary(qFilter.value)
+                }
+            }.lp(submissive, g258)
+            vList = vList(linear).lp(row, m(5.dp)) of qDictionary.qItems.vForEach { item, _ ->
                 vVertical(bgLayerCard, mw) {
                     vLinear(content456) {
-                        // Кнопка свернуть/развернуть
                         vImage(icCollapsed, tag(item), this@DictionaryFragment()).lp(row, 5f())
-                        // Привязываем само слово
-                        vText(line).lp(row, 1f()) of item.key
-                        // Кнопка удаления слова
+                        vText(line).lp(row, 1f()) of item.qKey
                         vImage(R.drawable.ic_remove, tag(item), this@DictionaryFragment()).lp(row, 5f())
                     }.lp(dominant, 1f())
-                    // Привязываем значение слова
-                    vText(text(G.Color.PRIMARY), hidden).lp(dominant, 1f(), m(2.dp)) of item.value
+                    vText(text(G.Color.PRIMARY), hidden).lp(dominant, 1f(), m(2.dp)) of item.qValue
                 }.llp(row, m(2.dp))
             }
-            vBtn("Add item to dictionary", this@DictionaryFragment())
+            vBtn("Add item to dictionary", this@DictionaryFragment()).lp(row)
         }}
     }
 
     override fun onClick(v: View?) {
-        // Нижняя функция самая сложная для понимания.
-        // Мы внутри списка ищем подходящий элемент словаря...
-        // ... и возвращаем view-частицу для описания слова
-        // Оно нужно, чтобы развернуть элемент словаря...
-        // ... и показать view, отвечающую за описание слова
         fun ListKuantum<DictionaryItem>.getItemValueView(itemAsViewTag: Any)
-        = find { it == itemAsViewTag }!!.value.firstView
+        = find { it == itemAsViewTag }!!.qValue.firstView
 
         if (v is Button) {
-            // Добавляем в словарь новый элемент
-            dictionary.items.add(DictionaryItem(TextKuantum(), TextKuantum()))
+            qDictionary.qItems.add(DictionaryItem(TextKuantum(), TextKuantum()))
+            vList.scrollToPosition(qDictionary.qItems.lastIndex)
         }
         else when ((v as ImageView).resourceId) {
-            // Разворачиваем слово
             icCollapsed -> {
                 v.imageResource = icExpanded
-                dictionary.items.getItemValueView(v.tag).visible()
+                qDictionary.qItems.getItemValueView(v.tag).visible()
             }
-            // Сворачиваем слово
             icExpanded  -> {
                 v.imageResource = icCollapsed
-                dictionary.items.getItemValueView(v.tag).hidden()
+                qDictionary.qItems.getItemValueView(v.tag).hidden()
             }
-            // Удаляем элемент
-            R.drawable.ic_remove -> dictionary.items.removeFirstWhere { it == v.tag }
+            R.drawable.ic_remove -> qDictionary.qItems.removeFirstWhere { it == v.tag }
+        }
+    }
+
+    // Фильтруем словарь
+    private fun filterDictionary(filterWord: String) {
+        qDictionary.qItems.filterView {
+            if (qFilterByKey.value && qFilterByValue.value.not()) it.qKey.value.contains(filterWord)
+            else if (qFilterByValue.value && qFilterByKey.value.not()) it.qValue.value.contains(filterWord)
+            else it.qKey.value.contains(filterWord) || it.qValue.value.contains(filterWord)
         }
     }
 }
